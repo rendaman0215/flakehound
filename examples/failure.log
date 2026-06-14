@@ -1,0 +1,4 @@
+2026-06-14T01:02:03Z Starting deploy
+2026-06-14T01:02:04Z Uploading image to registry
+2026-06-14T01:02:05Z ERROR: Permission denied: artifactregistry.repositories.uploadArtifacts
+2026-06-14T01:02:05Z Job failed with exit code 1

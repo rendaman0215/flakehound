@@ -1,0 +1,96 @@
+name: Flakehound
+description: Sniff failed GitHub Actions logs and publish an actionable LLM diagnosis.
+author: Flakehound contributors
+
+branding:
+  icon: search
+  color: yellow
+
+inputs:
+  repo:
+    description: Repository in owner/repo form.
+    required: true
+  run-id:
+    description: Failed GitHub Actions workflow run ID.
+    required: true
+  provider:
+    description: LLM provider (openai or anthropic).
+    required: false
+    default: openai
+  model:
+    description: Provider model name. Uses the CLI provider default when omitted.
+    required: false
+    default: ""
+  comment:
+    description: Post the diagnosis to a related pull request.
+    required: false
+    default: "false"
+  pr-number:
+    description: Explicit pull request number. Workflow metadata is used when omitted.
+    required: false
+    default: ""
+  version:
+    description: Flakehound release tag to install, or latest.
+    required: false
+    default: latest
+
+runs:
+  using: composite
+  steps:
+    - name: Install Flakehound
+      shell: bash
+      env:
+        ACTION_REPOSITORY: ${{ github.action_repository }}
+        FLAKEHOUND_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+
+        case "${RUNNER_OS}" in
+          Linux) os="linux" ;;
+          macOS) os="darwin" ;;
+          *) echo "Flakehound currently supports Linux and macOS runners, not ${RUNNER_OS}." >&2; exit 1 ;;
+        esac
+
+        case "${RUNNER_ARCH}" in
+          X64) arch="amd64" ;;
+          ARM64) arch="arm64" ;;
+          *) echo "Unsupported runner architecture: ${RUNNER_ARCH}." >&2; exit 1 ;;
+        esac
+
+        asset="flakehound_${os}_${arch}.tar.gz"
+        if [[ "${FLAKEHOUND_VERSION}" == "latest" ]]; then
+          url="https://github.com/${ACTION_REPOSITORY}/releases/latest/download/${asset}"
+        else
+          url="https://github.com/${ACTION_REPOSITORY}/releases/download/${FLAKEHOUND_VERSION}/${asset}"
+        fi
+
+        install_dir="${RUNNER_TEMP}/flakehound/bin"
+        mkdir -p "${install_dir}"
+        curl --fail --silent --show-error --location "${url}" --output "${RUNNER_TEMP}/${asset}"
+        tar -xzf "${RUNNER_TEMP}/${asset}" -C "${install_dir}"
+        chmod +x "${install_dir}/flakehound"
+        echo "${install_dir}" >> "${GITHUB_PATH}"
+
+    - name: Diagnose failed workflow
+      shell: bash
+      env:
+        INPUT_REPO: ${{ inputs.repo }}
+        INPUT_RUN_ID: ${{ inputs.run-id }}
+        INPUT_PROVIDER: ${{ inputs.provider }}
+        INPUT_MODEL: ${{ inputs.model }}
+        INPUT_COMMENT: ${{ inputs.comment }}
+        INPUT_PR_NUMBER: ${{ inputs.pr-number }}
+      run: |
+        set -euo pipefail
+
+        args=(sniff github --repo "${INPUT_REPO}" --run-id "${INPUT_RUN_ID}" --provider "${INPUT_PROVIDER}")
+        if [[ -n "${INPUT_MODEL}" ]]; then
+          args+=(--model "${INPUT_MODEL}")
+        fi
+        if [[ "${INPUT_COMMENT}" == "true" ]]; then
+          args+=(--comment)
+        fi
+        if [[ -n "${INPUT_PR_NUMBER}" ]]; then
+          args+=(--pr-number "${INPUT_PR_NUMBER}")
+        fi
+        flakehound "${args[@]}"

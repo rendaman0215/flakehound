@@ -150,7 +150,8 @@ func runGitHub(ctx context.Context, args []string, stdout, stderr io.Writer, get
 		return err
 	}
 	if err := githubClient.CreatePRComment(ctx, *repo, resolvedPR, markdown); err != nil {
-		return err
+		_, writeErr := fmt.Fprintf(stderr, "flakehound: warning: diagnosis was generated, but the PR comment could not be posted: %v\n", err)
+		return writeErr
 	}
 	_, err = fmt.Fprintf(stderr, "flakehound: posted diagnosis to PR #%d\n", resolvedPR)
 	return err

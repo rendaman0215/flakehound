@@ -85,7 +85,7 @@ permissions:
   actions: read
   contents: read
   issues: write
-  pull-requests: read
+  pull-requests: write
 
 jobs:
   sniff:
@@ -128,7 +128,7 @@ The Action supports Linux and macOS runners on x64 and ARM64. `version` defaults
 | `actions: read`       | Download workflow run logs and list failed jobs.   |
 | `contents: read`      | Standard minimal repository access.                |
 | `issues: write`       | Create a PR issue comment when `comment: true`.    |
-| `pull-requests: read` | Read pull request context associated with the run. |
+| `pull-requests: write` | Read pull request context and create a diagnosis comment. |
 
 The workflow intentionally does not check out or execute code from the failed pull request.
 

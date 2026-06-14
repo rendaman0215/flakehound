@@ -43,6 +43,8 @@ func writeBullets(b *strings.Builder, values []string, fallback string) {
 		values = []string{fallback}
 	}
 	for _, value := range values {
+		value = strings.Join(strings.Fields(value), " ")
+		value = strings.TrimLeft(value, "- *")
 		fmt.Fprintf(b, "- `%s`\n", strings.ReplaceAll(value, "`", "'"))
 	}
 }

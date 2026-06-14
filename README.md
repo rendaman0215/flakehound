@@ -46,10 +46,10 @@ flakehound sniff log \
 
 API keys are read only from environment variables. There are no API-key CLI flags.
 
-| Provider | Provider name | Environment variable | CLI default model |
-| --- | --- | --- | --- |
-| OpenAI | `openai` | `OPENAI_API_KEY` | `gpt-5.2` |
-| Anthropic | `anthropic` | `ANTHROPIC_API_KEY` | `claude-sonnet-4-5` |
+| Provider  | Provider name | Environment variable | CLI default model   |
+| --------- | ------------- | -------------------- | ------------------- |
+| OpenAI    | `openai`      | `OPENAI_API_KEY`     | `gpt-5.2`           |
+| Anthropic | `anthropic`   | `ANTHROPIC_API_KEY`  | `claude-sonnet-4-5` |
 
 Model names and availability change. Pass `--model` explicitly when you need a stable organization-approved model.
 
@@ -71,7 +71,7 @@ Use `--pr-number 123` when the workflow run metadata does not contain a pull req
 
 ## GitHub Action
 
-The Composite Action downloads a prebuilt Flakehound binary from GitHub Releases. The consuming repository does not need Go, Node.js, or Docker.
+The Composite Action downloads a prebuilt Flakehound binary from GitHub Releases and verifies it against the release SHA-256 checksum before extraction. The consuming repository does not need Go, Node.js, or Docker.
 
 ```yaml
 name: Flakehound
@@ -123,11 +123,11 @@ The Action supports Linux and macOS runners on x64 and ARM64. `version` defaults
 
 ### Required permissions
 
-| Permission | Why |
-| --- | --- |
-| `actions: read` | Download workflow run logs and list failed jobs. |
-| `contents: read` | Standard minimal repository access. |
-| `issues: write` | Create a PR issue comment when `comment: true`. |
+| Permission            | Why                                                |
+| --------------------- | -------------------------------------------------- |
+| `actions: read`       | Download workflow run logs and list failed jobs.   |
+| `contents: read`      | Standard minimal repository access.                |
+| `issues: write`       | Create a PR issue comment when `comment: true`.    |
 | `pull-requests: read` | Read pull request context associated with the run. |
 
 The workflow intentionally does not check out or execute code from the failed pull request.
@@ -169,9 +169,24 @@ The main responsibilities are separated under `internal/diagnosis`, `internal/lo
 ## Development
 
 ```bash
+go version # Go 1.26.4 or newer
 go test ./...
+go test -race ./...
+go vet ./...
 go build ./cmd/flakehound
 ```
+
+The application intentionally uses only the Go standard library at runtime. There are currently no third-party Go module dependencies to update.
+
+CI also enforces formatting, clean module files, a 60% coverage floor, `golangci-lint`, `govulncheck`, GitHub Actions validation, all release target builds, and a GoReleaser snapshot build.
+
+Dependency and tool updates are managed by Renovate through `renovate.json`. Install the Renovate GitHub App for the repository; it will update Go versions, GitHub Action digests, Go modules, and pinned CI tool versions on the configured weekly schedule.
+
+### Repository dogfooding
+
+This repository runs Flakehound against its own failed `CI` workflow through `.github/workflows/flakehound.yml`. Add `OPENAI_API_KEY` as a repository Actions secret to enable diagnosis and PR comments. Runs originating from forks are intentionally skipped so untrusted workflows cannot consume the repository's LLM credentials.
+
+GitHub only emits `workflow_run` events to workflows that already exist on the default branch. Therefore, the pull request that initially adds this dogfooding workflow cannot diagnose its own CI failures. After the workflow is merged, future failures are diagnosed automatically. A previous failed run can also be diagnosed from **Actions > Flakehound > Run workflow** by entering its workflow run ID.
 
 For source-based development before a release exists:
 
@@ -183,39 +198,6 @@ go run ./cmd/flakehound sniff log \
 
 Tag releases such as `v0.1.0` to run the included GoReleaser workflow. Its asset names match those expected by `action.yml`.
 
-## MVP scope
-
-Included:
-
-- GitHub Actions run metadata, failed job names, and log download
-- Local log-file diagnosis
-- OpenAI Responses API and Anthropic Messages API providers
-- Obvious-secret redaction and bounded log compression
-- Structured diagnosis with malformed-JSON fallback
-- Markdown output, Job Summary, and optional new PR comments
-- Release-backed Composite Action
-
-## Non-goals
-
-- Terraform-specific analysis
-- Kubernetes Event analysis
-- Argo CD analysis
-- Full owner routing or a runbook database
-- Similar-failure search
-- Web UI, Backstage plugin, Slack notification
-- Perfect secret detection or perfect PR-number resolution
-
-## Roadmap
-
-- Rule-based diagnosis
-- Owner routing
-- Runbook binding and custom prompts
-- PR comment update mode using the existing marker
-- GitHub Checks annotations
-- Similar failure search
-- Terraform, Kubernetes, and Argo CD analyzers
-- Slack reporter
-- Backstage plugin
 
 ## License
 

@@ -59,15 +59,30 @@ runs:
 
         asset="flakehound_${os}_${arch}.tar.gz"
         if [[ "${FLAKEHOUND_VERSION}" == "latest" ]]; then
-          url="https://github.com/${ACTION_REPOSITORY}/releases/latest/download/${asset}"
+          release_base="https://github.com/${ACTION_REPOSITORY}/releases/latest/download"
         else
-          url="https://github.com/${ACTION_REPOSITORY}/releases/download/${FLAKEHOUND_VERSION}/${asset}"
+          release_base="https://github.com/${ACTION_REPOSITORY}/releases/download/${FLAKEHOUND_VERSION}"
         fi
 
         install_dir="${RUNNER_TEMP}/flakehound/bin"
+        archive_path="${RUNNER_TEMP}/${asset}"
+        checksums_path="${RUNNER_TEMP}/flakehound-checksums.txt"
         mkdir -p "${install_dir}"
-        curl --fail --silent --show-error --location "${url}" --output "${RUNNER_TEMP}/${asset}"
-        tar -xzf "${RUNNER_TEMP}/${asset}" -C "${install_dir}"
+        curl --fail --silent --show-error --location "${release_base}/${asset}" --output "${archive_path}"
+        curl --fail --silent --show-error --location "${release_base}/checksums.txt" --output "${checksums_path}"
+
+        expected_checksum="$(awk -v asset="${asset}" '$2 == asset { print $1 }' "${checksums_path}")"
+        if [[ -z "${expected_checksum}" ]]; then
+          echo "No checksum found for ${asset}." >&2
+          exit 1
+        fi
+        actual_checksum="$(shasum -a 256 "${archive_path}" | awk '{ print $1 }')"
+        if [[ "${actual_checksum}" != "${expected_checksum}" ]]; then
+          echo "Checksum verification failed for ${asset}." >&2
+          exit 1
+        fi
+
+        tar -xzf "${archive_path}" -C "${install_dir}"
         chmod +x "${install_dir}/flakehound"
         echo "${install_dir}" >> "${GITHUB_PATH}"
 

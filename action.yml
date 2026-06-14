@@ -30,9 +30,9 @@ inputs:
     required: false
     default: ""
   version:
-    description: Flakehound release tag to install, or latest.
+    description: Exact Flakehound release tag to install. Defaults to the release paired with this Action revision.
     required: false
-    default: latest
+    default: ""
 
 runs:
   using: composite
@@ -44,6 +44,15 @@ runs:
         FLAKEHOUND_VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
+
+        version="${FLAKEHOUND_VERSION}"
+        if [[ -z "${version}" ]]; then
+          version="$(tr -d '[:space:]' < "${GITHUB_ACTION_PATH}/VERSION")"
+        fi
+        if [[ ! "${version}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "Flakehound version must be an exact release tag such as v0.2.0, got: ${version}." >&2
+          exit 1
+        fi
 
         case "${RUNNER_OS}" in
           Linux) os="linux" ;;
@@ -58,11 +67,7 @@ runs:
         esac
 
         asset="flakehound_${os}_${arch}.tar.gz"
-        if [[ "${FLAKEHOUND_VERSION}" == "latest" ]]; then
-          release_base="https://github.com/${ACTION_REPOSITORY}/releases/latest/download"
-        else
-          release_base="https://github.com/${ACTION_REPOSITORY}/releases/download/${FLAKEHOUND_VERSION}"
-        fi
+        release_base="https://github.com/${ACTION_REPOSITORY}/releases/download/${version}"
 
         install_dir="${RUNNER_TEMP}/flakehound/bin"
         archive_path="${RUNNER_TEMP}/${asset}"

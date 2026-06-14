@@ -13,14 +13,14 @@ func Markdown(d *diagnosis.Diagnosis) string {
 	var b strings.Builder
 	b.WriteString(Marker + "\n")
 	b.WriteString("## 🐶 Flakehound Diagnosis\n\n")
-	fmt.Fprintf(&b, "**Failure type:** %s  \n", display(d.FailureType, "unknown"))
-	fmt.Fprintf(&b, "**Retryable:** %s  \n", title(display(d.Retryable, "unknown")))
+	fmt.Fprintf(&b, "**Failure type:** %s  \n", safeMarkdownText(display(d.FailureType, "unknown")))
+	fmt.Fprintf(&b, "**Retryable:** %s  \n", title(safeMarkdownText(display(d.Retryable, "unknown"))))
 	fmt.Fprintf(&b, "**Confidence:** %.2f  \n", d.Confidence)
-	fmt.Fprintf(&b, "**Owner hint:** %s\n\n", display(d.OwnerHint, "unknown"))
+	fmt.Fprintf(&b, "**Owner hint:** %s\n\n", safeMarkdownText(display(d.OwnerHint, "unknown")))
 	b.WriteString("### What happened\n\n")
-	b.WriteString(display(d.Summary, "No summary was returned.") + "\n\n")
+	b.WriteString(safeMarkdownText(display(d.Summary, "No summary was returned.")) + "\n\n")
 	b.WriteString("### Likely cause\n\n")
-	b.WriteString(display(d.LikelyCause, "Unknown from the available evidence.") + "\n\n")
+	b.WriteString(safeMarkdownText(display(d.LikelyCause, "Unknown from the available evidence.")) + "\n\n")
 	b.WriteString("### What you should do next\n\n")
 	writeNumbered(&b, d.NextActions, "Review the evidence below and inspect the failed job logs.")
 	b.WriteString("\n### Evidence\n\n")
@@ -34,7 +34,7 @@ func writeNumbered(b *strings.Builder, values []string, fallback string) {
 		values = []string{fallback}
 	}
 	for i, value := range values {
-		fmt.Fprintf(b, "%d. %s\n", i+1, value)
+		fmt.Fprintf(b, "%d. %s\n", i+1, safeMarkdownText(value))
 	}
 }
 
@@ -43,10 +43,36 @@ func writeBullets(b *strings.Builder, values []string, fallback string) {
 		values = []string{fallback}
 	}
 	for _, value := range values {
-		value = strings.Join(strings.Fields(value), " ")
+		value = safeCodeText(value)
 		value = strings.TrimLeft(value, "- *")
-		fmt.Fprintf(b, "- `%s`\n", strings.ReplaceAll(value, "`", "'"))
+		fmt.Fprintf(b, "- `%s`\n", value)
 	}
+}
+
+func safeMarkdownText(value string) string {
+	value = strings.Join(strings.Fields(value), " ")
+	value = strings.NewReplacer(
+		"\\", "\\\\",
+		"&", "&amp;",
+		"<", "&lt;",
+		">", "&gt;",
+		"@", "@\u200b",
+	).Replace(value)
+
+	var b strings.Builder
+	for _, r := range value {
+		if strings.ContainsRune("`*_{}[]()#+-.!|:", r) {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+func safeCodeText(value string) string {
+	value = strings.Join(strings.Fields(value), " ")
+	value = strings.ReplaceAll(value, "`", "'")
+	return strings.ReplaceAll(value, "@", "@\u200b")
 }
 
 func display(value, fallback string) string {

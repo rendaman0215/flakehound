@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rendaman0215/flakehound/internal/diagnosis"
+	"github.com/rendaman0215/flakehound/internal/httpretry"
 )
 
 const (
@@ -23,6 +24,7 @@ type Client struct {
 	model      string
 	baseURL    string
 	httpClient *http.Client
+	retry      httpretry.Policy
 }
 
 func New(apiKey, model string) *Client {
@@ -39,7 +41,13 @@ func NewWithOptions(apiKey, model, baseURL string, httpClient *http.Client) *Cli
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 90 * time.Second}
 	}
-	return &Client{apiKey: apiKey, model: model, baseURL: strings.TrimRight(baseURL, "/"), httpClient: httpClient}
+	return &Client{
+		apiKey:     apiKey,
+		model:      model,
+		baseURL:    strings.TrimRight(baseURL, "/"),
+		httpClient: httpClient,
+		retry:      httpretry.DefaultPolicy(),
+	}
 }
 
 func (c *Client) Diagnose(ctx context.Context, input diagnosis.DiagnosisInput) (*diagnosis.Diagnosis, error) {
@@ -71,7 +79,7 @@ func (c *Client) Diagnose(ctx context.Context, input diagnosis.DiagnosisInput) (
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.retry.Do(ctx, c.httpClient, req)
 	if err != nil {
 		return nil, fmt.Errorf("call OpenAI: %w", err)
 	}
@@ -102,7 +110,7 @@ func (c *Client) Diagnose(ctx context.Context, input diagnosis.DiagnosisInput) (
 			}
 		}
 	}
-	return diagnosis.Parse(raw), nil
+	return diagnosis.Parse(raw, input.Log), nil
 }
 
 func apiError(provider string, resp *http.Response) error {

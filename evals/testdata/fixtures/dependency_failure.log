@@ -1,0 +1,5 @@
+2026-05-11T03:40:14Z Resolving build dependencies
+2026-05-11T03:40:16Z GET https://packages.example.invalid/v2/library/module/manifests/v3.2.1
+2026-05-11T03:40:46Z error: registry response: 503 Service Unavailable
+2026-05-11T03:40:46Z dependency download failed after 3 attempts
+2026-05-11T03:40:46Z Process completed with exit code 1.

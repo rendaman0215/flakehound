@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "go_assertion_failure",
+      "title": "Application test assertion fails deterministically",
+      "log_fixture": "fixtures/test_failure.log",
+      "tags": ["go", "unit-test"],
+      "expected": {
+        "failure_type": "test_failure",
+        "retryable": "no",
+        "owner_hint": "app",
+        "evidence_substrings": [
+          "expected status 204, got 500",
+          "FAIL example.invalid/project/service"
+        ]
+      }
+    },
+    {
+      "id": "registry_service_unavailable",
+      "title": "Package registry returns a transient service error",
+      "log_fixture": "fixtures/dependency_failure.log",
+      "tags": ["dependency", "registry"],
+      "expected": {
+        "failure_type": "dependency_failure",
+        "retryable": "yes",
+        "owner_hint": "platform",
+        "evidence_substrings": [
+          "503 Service Unavailable",
+          "dependency download failed"
+        ]
+      }
+    },
+    {
+      "id": "deploy_role_forbidden",
+      "title": "Deployment identity lacks permission for the target environment",
+      "log_fixture": "fixtures/permission_error.log",
+      "tags": ["deployment", "iam"],
+      "expected": {
+        "failure_type": "permission_error",
+        "retryable": "no",
+        "owner_hint": "security",
+        "evidence_substrings": [
+          "is not authorized to perform: deploy:UpdateService",
+          "AccessDenied"
+        ]
+      }
+    },
+    {
+      "id": "hosted_runner_disconnect",
+      "title": "Hosted runner loses contact with the CI control plane",
+      "log_fixture": "fixtures/infra_error.log",
+      "tags": ["runner", "infrastructure"],
+      "expected": {
+        "failure_type": "infra_error",
+        "retryable": "yes",
+        "owner_hint": "platform",
+        "evidence_substrings": [
+          "runner has lost communication with the server",
+          "job was abandoned by the runner"
+        ]
+      }
+    },
+    {
+      "id": "browser_test_passes_on_retry",
+      "title": "Browser test fails once and passes on immediate retry",
+      "log_fixture": "fixtures/flaky_suspected.log",
+      "tags": ["browser", "flaky-test"],
+      "expected": {
+        "failure_type": "flaky_suspected",
+        "retryable": "yes",
+        "owner_hint": "app",
+        "evidence_substrings": [
+          "attempt 1: failed: element was detached",
+          "attempt 2: passed"
+        ]
+      }
+    }
+  ]
+}

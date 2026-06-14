@@ -1,0 +1,6 @@
+2026-05-10T09:12:00Z go test ./...
+2026-05-10T09:12:02Z --- FAIL: TestCreateWidget (0.01s)
+2026-05-10T09:12:02Z     handler_test.go:87: expected status 204, got 500
+2026-05-10T09:12:02Z FAIL
+2026-05-10T09:12:02Z FAIL example.invalid/project/service 0.214s
+2026-05-10T09:12:02Z Process completed with exit code 1.

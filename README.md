@@ -186,6 +186,8 @@ Dependency and tool updates are managed by Renovate through `renovate.json`. Ins
 
 This repository runs Flakehound against its own failed `CI` workflow through `.github/workflows/flakehound.yml`. Add `OPENAI_API_KEY` as a repository Actions secret to enable diagnosis and PR comments. Runs originating from forks are intentionally skipped so untrusted workflows cannot consume the repository's LLM credentials.
 
+GitHub only emits `workflow_run` events to workflows that already exist on the default branch. Therefore, the pull request that initially adds this dogfooding workflow cannot diagnose its own CI failures. After the workflow is merged, future failures are diagnosed automatically. A previous failed run can also be diagnosed from **Actions > Flakehound > Run workflow** by entering its workflow run ID.
+
 For source-based development before a release exists:
 
 ```bash

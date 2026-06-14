@@ -20,12 +20,11 @@ type getenvFunc func(string) string
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer, getenv getenvFunc, version string) error {
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
-		writeUsage(stdout)
-		return nil
+		return writeUsage(stdout)
 	}
 	if args[0] == "version" || args[0] == "--version" {
-		fmt.Fprintln(stdout, version)
-		return nil
+		_, err := fmt.Fprintln(stdout, version)
+		return err
 	}
 	if len(args) < 2 || args[0] != "sniff" {
 		return fmt.Errorf("unknown command; expected 'sniff log' or 'sniff github'")
@@ -106,7 +105,9 @@ func runGitHub(ctx context.Context, args []string, stdout, stderr io.Writer, get
 	}
 	failedJobs, err := githubClient.FailedJobs(ctx, *repo, *runID)
 	if err != nil {
-		fmt.Fprintf(stderr, "flakehound: warning: could not list failed jobs: %v\n", err)
+		if _, writeErr := fmt.Fprintf(stderr, "flakehound: warning: could not list failed jobs: %v\n", err); writeErr != nil {
+			return writeErr
+		}
 	}
 	rawLogs, err := githubClient.DownloadLogs(ctx, *repo, *runID)
 	if err != nil {
@@ -145,14 +146,14 @@ func runGitHub(ctx context.Context, args []string, stdout, stderr io.Writer, get
 		resolvedPR = run.PullRequests[0].Number
 	}
 	if resolvedPR == 0 {
-		fmt.Fprintln(stderr, "flakehound: PR comment skipped: no PR number was provided or found in workflow run metadata")
-		return nil
+		_, err := fmt.Fprintln(stderr, "flakehound: PR comment skipped: no PR number was provided or found in workflow run metadata")
+		return err
 	}
 	if err := githubClient.CreatePRComment(ctx, *repo, resolvedPR, markdown); err != nil {
 		return err
 	}
-	fmt.Fprintf(stderr, "flakehound: posted diagnosis to PR #%d\n", resolvedPR)
-	return nil
+	_, err = fmt.Fprintf(stderr, "flakehound: posted diagnosis to PR #%d\n", resolvedPR)
+	return err
 }
 
 func newDiagnoser(provider, model string, getenv getenvFunc) (diagnosis.Diagnoser, error) {
@@ -176,13 +177,15 @@ func appendFile(filename, content string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
-	_, err = io.WriteString(file, content+"\n")
-	return err
+	if _, err = io.WriteString(file, content+"\n"); err != nil {
+		_ = file.Close()
+		return err
+	}
+	return file.Close()
 }
 
-func writeUsage(w io.Writer) {
-	fmt.Fprintln(w, `Flakehound sniffs broken CI logs and tells developers what to do next.
+func writeUsage(w io.Writer) error {
+	_, err := fmt.Fprintln(w, `Flakehound sniffs broken CI logs and tells developers what to do next.
 
 Usage:
   flakehound sniff log --log-file FILE [--provider openai|anthropic] [--model MODEL]
@@ -190,4 +193,5 @@ Usage:
   flakehound version
 
 API keys are read only from OPENAI_API_KEY, ANTHROPIC_API_KEY, and GITHUB_TOKEN.`)
+	return err
 }

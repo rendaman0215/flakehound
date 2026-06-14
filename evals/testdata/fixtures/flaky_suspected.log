@@ -1,0 +1,5 @@
+2026-05-14T07:25:10Z Running browser checkout suite with retry detection
+2026-05-14T07:25:31Z Checkout confirmation test attempt 1: failed: element was detached from the DOM
+2026-05-14T07:25:44Z Checkout confirmation test attempt 2: passed
+2026-05-14T07:25:44Z error: flaky-test policy rejects tests that pass only after retry
+2026-05-14T07:25:44Z Process completed with exit code 1.

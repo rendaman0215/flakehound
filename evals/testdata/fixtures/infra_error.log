@@ -1,0 +1,4 @@
+2026-05-13T22:17:33Z Starting integration test shard 3 of 4
+2026-05-13T22:19:02Z ##[warning]The runner has lost communication with the server. Check network connectivity.
+2026-05-13T22:20:32Z ##[error]The job was abandoned by the runner before a step result was reported.
+2026-05-13T22:20:32Z No test assertion or compiler error was recorded.

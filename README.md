@@ -119,7 +119,7 @@ Anthropic uses the same Action:
     ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-The Action supports Linux and macOS runners on x64 and ARM64. `version` defaults to the latest release; set it to a release tag such as `v0.1.0` to pin the downloaded CLI.
+The Action supports Linux and macOS runners on x64 and ARM64. By default, it downloads the exact CLI release recorded in the Action revision's `VERSION` file, so a pinned Action revision cannot silently install a newer CLI. Set `version` only when you intentionally need to override it with an exact release tag such as `v0.2.0`.
 
 ### Required permissions
 
@@ -186,7 +186,7 @@ Dependency and tool updates are managed by Renovate through `renovate.json`. Ins
 
 This repository runs Flakehound against its own failed `CI` workflow through `.github/workflows/flakehound.yml`. Add `OPENAI_API_KEY` as a repository Actions secret to enable diagnosis and PR comments. Runs originating from forks are intentionally skipped so untrusted workflows cannot consume the repository's LLM credentials.
 
-GitHub only emits `workflow_run` events to workflows that already exist on the default branch. Therefore, the pull request that initially adds this dogfooding workflow cannot diagnose its own CI failures. After the workflow is merged, future failures are diagnosed automatically. A previous failed run can also be diagnosed from **Actions > Flakehound > Run workflow** by entering its workflow run ID.
+GitHub only emits `workflow_run` events to workflows that already exist on the default branch. Therefore, the pull request that initially adds this dogfooding workflow cannot diagnose its own CI failures. After the workflow is merged, future failures are diagnosed automatically.
 
 For source-based development before a release exists:
 
@@ -196,7 +196,7 @@ go run ./cmd/flakehound sniff log \
   --provider openai
 ```
 
-Tag releases such as `v0.1.0` to run the included GoReleaser workflow. Its asset names match those expected by `action.yml`.
+Update `VERSION`, then push the matching tag (for example, `v0.2.0`) to run the included GoReleaser workflow. The workflow rejects mismatched tags, publishes assets expected by `action.yml`, and moves the matching major tag (for example, `v0`) to the released commit.
 
 
 ## License

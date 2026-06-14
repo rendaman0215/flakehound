@@ -15,10 +15,18 @@ import (
 )
 
 const (
-	defaultBaseURL = "https://api.github.com"
-	maxArchiveSize = 64 << 20
-	maxLogFileSize = 16 << 20
+	defaultBaseURL      = "https://api.github.com"
+	maxArchiveSize      = 64 << 20
+	maxLogFileSize      = 16 << 20
+	maxTotalLogSize     = 64 << 20
+	maxArchiveFileCount = 1_000
 )
+
+type logArchiveLimits struct {
+	maxFileBytes  int64
+	maxTotalBytes int64
+	maxFiles      int
+}
 
 type Client struct {
 	token      string
@@ -63,17 +71,24 @@ func (c *Client) GetRun(ctx context.Context, repo string, runID int64) (*Workflo
 }
 
 func (c *Client) FailedJobs(ctx context.Context, repo string, runID int64) ([]string, error) {
-	var response struct {
-		Jobs []Job `json:"jobs"`
-	}
-	endpoint := repoPath(repo, fmt.Sprintf("actions/runs/%d/jobs?filter=latest&per_page=100", runID))
-	if err := c.getJSON(ctx, endpoint, &response); err != nil {
-		return nil, fmt.Errorf("list workflow jobs: %w", err)
-	}
 	var names []string
-	for _, job := range response.Jobs {
-		if job.Conclusion == "failure" || job.Conclusion == "timed_out" || job.Conclusion == "cancelled" || job.Conclusion == "action_required" {
-			names = append(names, job.Name)
+	for page := 1; ; page++ {
+		var response struct {
+			TotalCount int   `json:"total_count"`
+			Jobs       []Job `json:"jobs"`
+		}
+		endpoint := repoPath(repo, fmt.Sprintf("actions/runs/%d/jobs?filter=latest&per_page=100&page=%d", runID, page))
+		hasNext, err := c.getJSONPage(ctx, endpoint, &response)
+		if err != nil {
+			return nil, fmt.Errorf("list workflow jobs: %w", err)
+		}
+		for _, job := range response.Jobs {
+			if job.Conclusion == "failure" || job.Conclusion == "timed_out" || job.Conclusion == "cancelled" || job.Conclusion == "action_required" {
+				names = append(names, job.Name)
+			}
+		}
+		if !hasNext && len(response.Jobs) < 100 && response.TotalCount <= page*100 {
+			break
 		}
 	}
 	return names, nil
@@ -124,22 +139,27 @@ func (c *Client) CreatePRComment(ctx context.Context, repo string, prNumber int,
 }
 
 func (c *Client) getJSON(ctx context.Context, endpoint string, target any) error {
+	_, err := c.getJSONPage(ctx, endpoint, target)
+	return err
+}
+
+func (c *Client) getJSONPage(ctx context.Context, endpoint string, target any) (bool, error) {
 	req, err := c.request(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return err
+		return false, err
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return responseError(resp)
+		return false, responseError(resp)
 	}
 	if err := json.NewDecoder(resp.Body).Decode(target); err != nil {
-		return fmt.Errorf("decode GitHub response: %w", err)
+		return false, fmt.Errorf("decode GitHub response: %w", err)
 	}
-	return nil
+	return strings.Contains(resp.Header.Get("Link"), `rel="next"`), nil
 }
 
 func (c *Client) request(ctx context.Context, method, endpoint string, body io.Reader) (*http.Request, error) {
@@ -170,20 +190,40 @@ func repoPath(repo, suffix string) string {
 }
 
 func unpackLogs(archive []byte) (string, error) {
+	return unpackLogsWithLimits(archive, logArchiveLimits{
+		maxFileBytes:  maxLogFileSize,
+		maxTotalBytes: maxTotalLogSize,
+		maxFiles:      maxArchiveFileCount,
+	})
+}
+
+func unpackLogsWithLimits(archive []byte, limits logArchiveLimits) (string, error) {
 	zr, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))
 	if err != nil {
 		return "", fmt.Errorf("open workflow logs archive: %w", err)
 	}
+	if len(zr.File) > limits.maxFiles {
+		return "", fmt.Errorf("workflow logs archive contains %d files, limit is %d", len(zr.File), limits.maxFiles)
+	}
 	var result strings.Builder
+	var totalBytes int64
 	for _, file := range zr.File {
 		if file.FileInfo().IsDir() || !strings.HasSuffix(strings.ToLower(file.Name), ".txt") {
 			continue
 		}
+		if file.UncompressedSize64 > uint64(limits.maxFileBytes) {
+			return "", fmt.Errorf("log file %s exceeds %d bytes", file.Name, limits.maxFileBytes)
+		}
+		remainingTotal := limits.maxTotalBytes - totalBytes
+		if remainingTotal <= 0 {
+			return "", fmt.Errorf("workflow logs exceed %d total bytes", limits.maxTotalBytes)
+		}
+		readLimit := min(limits.maxFileBytes, remainingTotal)
 		r, err := file.Open()
 		if err != nil {
 			return "", fmt.Errorf("open log file %s: %w", file.Name, err)
 		}
-		content, readErr := io.ReadAll(io.LimitReader(r, maxLogFileSize))
+		content, readErr := io.ReadAll(io.LimitReader(r, readLimit+1))
 		closeErr := r.Close()
 		if readErr != nil {
 			return "", fmt.Errorf("read log file %s: %w", file.Name, readErr)
@@ -191,6 +231,13 @@ func unpackLogs(archive []byte) (string, error) {
 		if closeErr != nil {
 			return "", fmt.Errorf("close log file %s: %w", file.Name, closeErr)
 		}
+		if int64(len(content)) > limits.maxFileBytes {
+			return "", fmt.Errorf("log file %s exceeds %d bytes", file.Name, limits.maxFileBytes)
+		}
+		if int64(len(content)) > remainingTotal {
+			return "", fmt.Errorf("workflow logs exceed %d total bytes", limits.maxTotalBytes)
+		}
+		totalBytes += int64(len(content))
 		fmt.Fprintf(&result, "\n===== %s =====\n%s\n", file.Name, content)
 	}
 	if result.Len() == 0 {

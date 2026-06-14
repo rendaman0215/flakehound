@@ -59,6 +59,72 @@ func TestWorkflowRunLogsAndComment(t *testing.T) {
 	}
 }
 
+func TestFailedJobsPaginates(t *testing.T) {
+	var requestedPages []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestedPages = append(requestedPages, r.URL.Query().Get("page"))
+		switch r.URL.Query().Get("page") {
+		case "1":
+			w.Header().Set("Link", `<http://example.test/jobs?page=2>; rel="next"`)
+			_, _ = w.Write([]byte(`{"total_count":2,"jobs":[{"name":"linux","conclusion":"failure"}]}`))
+		case "2":
+			_, _ = w.Write([]byte(`{"total_count":2,"jobs":[{"name":"windows","conclusion":"timed_out"}]}`))
+		default:
+			http.Error(w, "unexpected page", http.StatusBadRequest)
+		}
+	}))
+	defer server.Close()
+
+	client := NewWithOptions("token", server.URL, server.Client())
+	jobs, err := client.FailedJobs(context.Background(), "owner/repo", 42)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(jobs, ",") != "linux,windows" {
+		t.Fatalf("failed jobs = %v, want both pages", jobs)
+	}
+	if strings.Join(requestedPages, ",") != "1,2" {
+		t.Fatalf("requested pages = %v, want [1 2]", requestedPages)
+	}
+}
+
+func TestUnpackLogsEnforcesLimits(t *testing.T) {
+	tests := []struct {
+		name    string
+		files   map[string]string
+		limits  logArchiveLimits
+		wantErr string
+	}{
+		{
+			name:    "per file bytes",
+			files:   map[string]string{"large.txt": "123456"},
+			limits:  logArchiveLimits{maxFileBytes: 5, maxTotalBytes: 100, maxFiles: 10},
+			wantErr: "log file large.txt exceeds 5 bytes",
+		},
+		{
+			name:    "total bytes",
+			files:   map[string]string{"one.txt": "1234", "two.txt": "5678"},
+			limits:  logArchiveLimits{maxFileBytes: 10, maxTotalBytes: 7, maxFiles: 10},
+			wantErr: "workflow logs exceed 7 total bytes",
+		},
+		{
+			name:    "file count",
+			files:   map[string]string{"one.txt": "1", "two.txt": "2", "metadata.json": "{}"},
+			limits:  logArchiveLimits{maxFileBytes: 10, maxTotalBytes: 100, maxFiles: 2},
+			wantErr: "archive contains 3 files, limit is 2",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := unpackLogsWithLimits(zipArchive(t, test.files), test.limits)
+			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("error = %v, want containing %q", err, test.wantErr)
+			}
+		})
+	}
+}
+
 func zipArchive(t *testing.T, files map[string]string) []byte {
 	t.Helper()
 	var buffer bytes.Buffer

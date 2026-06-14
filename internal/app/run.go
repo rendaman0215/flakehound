@@ -123,7 +123,7 @@ func runGitHub(ctx context.Context, args []string, stdout, stderr io.Writer, get
 		RunURL:     run.HTMLURL,
 		Workflow:   run.Name,
 		FailedJobs: failedJobs,
-		Log:        logprocessor.Process(rawLogs, *maxChars),
+		Log:        logprocessor.Process(rawLogs, *maxChars, failedJobs...),
 	})
 	if err != nil {
 		return err

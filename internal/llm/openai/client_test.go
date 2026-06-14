@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/rendaman0215/flakehound/internal/diagnosis"
 )
@@ -41,5 +43,43 @@ func TestMissingAPIKey(t *testing.T) {
 	_, err := New("", "").Diagnose(context.Background(), diagnosis.DiagnosisInput{})
 	if err == nil || err.Error() != "OPENAI_API_KEY is required for provider openai" {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestDiagnoseRetriesTransientFailure(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		if attempts == 1 {
+			http.Error(w, "busy", http.StatusInternalServerError)
+			return
+		}
+		_, _ = w.Write([]byte(`{"output_text":"{\"summary\":\"recovered\"}"}`))
+	}))
+	defer server.Close()
+
+	client := NewWithOptions("test-key", "test-model", server.URL, server.Client())
+	client.retry.Sleep = func(context.Context, time.Duration) error { return nil }
+	got, err := client.Diagnose(context.Background(), diagnosis.DiagnosisInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if attempts != 2 || got.Summary != "recovered" {
+		t.Fatalf("attempts=%d diagnosis=%+v", attempts, got)
+	}
+}
+
+func TestDiagnoseDoesNotRetryPermanentFailure(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		http.Error(w, "invalid request", http.StatusBadRequest)
+	}))
+	defer server.Close()
+
+	client := NewWithOptions("test-key", "test-model", server.URL, server.Client())
+	_, err := client.Diagnose(context.Background(), diagnosis.DiagnosisInput{})
+	if err == nil || !strings.Contains(err.Error(), "400 Bad Request") || attempts != 1 {
+		t.Fatalf("attempts=%d error=%v", attempts, err)
 	}
 }

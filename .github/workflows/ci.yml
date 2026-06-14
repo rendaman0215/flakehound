@@ -96,6 +96,20 @@ jobs:
       - name: Run actionlint
         run: go run "github.com/rhysd/actionlint/cmd/actionlint@${ACTIONLINT_VERSION}" .github/workflows/*.yml
 
+      - name: Validate release version contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < VERSION)"
+          if [[ ! "${version}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "VERSION must contain an exact semantic release tag, got: ${version}." >&2
+            exit 1
+          fi
+          if grep -Eq 'default:[[:space:]]*latest' action.yml; then
+            echo "action.yml must not install the mutable latest release by default." >&2
+            exit 1
+          fi
+
       - name: Set up Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:

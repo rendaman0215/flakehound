@@ -71,7 +71,7 @@ Use `--pr-number 123` when the workflow run metadata does not contain a pull req
 
 ## GitHub Action
 
-The Composite Action downloads a prebuilt Flakehound binary from GitHub Releases. The consuming repository does not need Go, Node.js, or Docker.
+The Composite Action downloads a prebuilt Flakehound binary from GitHub Releases and verifies it against the release SHA-256 checksum before extraction. The consuming repository does not need Go, Node.js, or Docker.
 
 ```yaml
 name: Flakehound
@@ -169,9 +169,18 @@ The main responsibilities are separated under `internal/diagnosis`, `internal/lo
 ## Development
 
 ```bash
+go version # Go 1.26.4 or newer
 go test ./...
+go test -race ./...
+go vet ./...
 go build ./cmd/flakehound
 ```
+
+The application intentionally uses only the Go standard library at runtime. There are currently no third-party Go module dependencies to update.
+
+CI also enforces formatting, clean module files, a 60% coverage floor, `golangci-lint`, `govulncheck`, GitHub Actions validation, all release target builds, and a GoReleaser snapshot build.
+
+Dependency and tool updates are managed by Renovate through `renovate.json`. Install the Renovate GitHub App for the repository; it will update Go versions, GitHub Action digests, Go modules, and pinned CI tool versions on the configured weekly schedule.
 
 For source-based development before a release exists:
 

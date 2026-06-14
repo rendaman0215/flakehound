@@ -71,7 +71,7 @@ func (c *Client) Diagnose(ctx context.Context, input diagnosis.DiagnosisInput) (
 	if err != nil {
 		return nil, fmt.Errorf("call Anthropic: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, apiError("Anthropic", resp)
 	}

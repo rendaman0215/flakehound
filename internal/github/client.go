@@ -88,7 +88,7 @@ func (c *Client) DownloadLogs(ctx context.Context, repo string, runID int64) (st
 	if err != nil {
 		return "", fmt.Errorf("download workflow logs: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return "", responseError(resp)
 	}
@@ -116,7 +116,7 @@ func (c *Client) CreatePRComment(ctx context.Context, repo string, prNumber int,
 	if err != nil {
 		return fmt.Errorf("create PR comment: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("create PR comment: %w", responseError(resp))
 	}
@@ -132,7 +132,7 @@ func (c *Client) getJSON(ctx context.Context, endpoint string, target any) error
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return responseError(resp)
 	}

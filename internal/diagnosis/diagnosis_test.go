@@ -19,7 +19,7 @@ func TestParseFallback(t *testing.T) {
 
 func TestParseCodeFence(t *testing.T) {
 	d := Parse("```json\n{\"summary\":\"ok\",\"confidence\":0.8}\n```")
-	if d.Summary != "ok" || d.Confidence != 0.8 {
+	if d.Summary != "ok" || d.Confidence != a {
 		t.Fatalf("unexpected diagnosis: %+v", d)
 	}
 }

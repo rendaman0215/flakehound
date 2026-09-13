@@ -23,7 +23,7 @@ env:
   # renovate: datasource=github-releases depName=goreleaser/goreleaser
   GORELEASER_VERSION: "v2.14.3"
   # renovate: datasource=npm depName=renovate
-  RENOVATE_VERSION: "43.11.1"
+  RENOVATE_VERSION: "43.288.0"
 
 jobs:
   quality:

@@ -43,7 +43,7 @@ jobs:
 
       - name: Diagnose CI failure
         if: steps.config.outputs.enabled == 'true'
-        uses: rendaman0215/flakehound@v0.1.0
+        uses: rendaman0215/flakehound@7b1a88353fb934c856a9c8e1df8549d38e47248f # v0.2.0
         with:
           repo: ${{ github.repository }}
           run-id: ${{ github.event.workflow_run.id }}
